@@ -3,7 +3,7 @@
   "key.categories.notely": "Нотатник",
 
   "notely.button.new_note": "Нова нотатка",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Видалити",
 
   "notely.help.title": "Довідка з синтаксису",
-  "notely.help.content": "# Заголовок H1\n## Заголовок H2\n### Заголовок H3\n---\n> Цитата\n`Код у тексті`\n---\n[ ] Завдання не виконано\n[x] Завдання виконано\n---\nЗвичайний текст. Натисніть \uD83D\uDCCC для закріплення.\nПКМ по нотатці в меню.\nCtrl+Backspace \u2014 видалити слово."
+  "notely.help.content": "# Заголовок H1\n## Заголовок H2\n### Заголовок H3\n---\n> Цитата\n`Код у тексті`\n---\n[ ] Завдання не виконано\n[x] Завдання виконано\n---\nЗвичайний текст. Натисніть 'P' для закріплення.\nПКМ по нотатці в меню.\nCtrl+Backspace \u2014 видалити слово."
 }

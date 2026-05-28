@@ -3,7 +3,7 @@
   "key.categories.notely": "Bloco de notas",
 
   "notely.button.new_note": "Nova nota",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Excluir",
 
   "notely.help.title": "Ajuda de sintaxe",
-  "notely.help.content": "# Título H1\n## Título H2\n### Título H3\n---\n> Citação\n`Código no texto`\n---\n[ ] Tarefa pendente\n[x] Tarefa concluída\n---\nTexto normal. \uD83D\uDCCC para fixar.\nClique direito em uma nota.\nCtrl+Backspace \u2014 apagar palavra."
+  "notely.help.content": "# Título H1\n## Título H2\n### Título H3\n---\n> Citação\n`Código no texto`\n---\n[ ] Tarefa pendente\n[x] Tarefa concluída\n---\nTexto normal. 'P' para fixar.\nClique direito em uma nota.\nCtrl+Backspace \u2014 apagar palavra."
 }

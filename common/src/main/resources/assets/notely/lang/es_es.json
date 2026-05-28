@@ -3,7 +3,7 @@
   "key.categories.notely": "Bloc de notas",
 
   "notely.button.new_note": "Nueva nota",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Eliminar",
 
   "notely.help.title": "Ayuda de sintaxis",
-  "notely.help.content": "# Encabezado H1\n## Encabezado H2\n### Encabezado H3\n---\n> Cita\n`Código en texto`\n---\n[ ] Tarea pendiente\n[x] Tarea completada\n---\nTexto normal. \uD83D\uDCCC para fijar.\nClic derecho en una nota.\nCtrl+Retroceso \u2014 borrar palabra."
+  "notely.help.content": "# Encabezado H1\n## Encabezado H2\n### Encabezado H3\n---\n> Cita\n`Código en texto`\n---\n[ ] Tarea pendiente\n[x] Tarea completada\n---\nTexto normal. 'P' para fijar.\nClic derecho en una nota.\nCtrl+Retroceso \u2014 borrar palabra."
 }

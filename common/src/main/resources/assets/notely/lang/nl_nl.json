@@ -3,7 +3,7 @@
   "key.categories.notely": "Kladblok",
 
   "notely.button.new_note": "Nieuwe notitie",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Verwijderen",
 
   "notely.help.title": "Syntaxishulp",
-  "notely.help.content": "# Kop H1\n## Kop H2\n### Kop H3\n---\n> Citaat\n`Code in tekst`\n---\n[ ] Taak open\n[x] Taak voltooid\n---\nNormale tekst. \uD83D\uDCCC om vast te zetten.\nRMK op een notitie.\nCtrl+Backspace \u2014 woord verwijderen."
+  "notely.help.content": "# Kop H1\n## Kop H2\n### Kop H3\n---\n> Citaat\n`Code in tekst`\n---\n[ ] Taak open\n[x] Taak voltooid\n---\nNormale tekst. 'P' om vast te zetten.\nRMK op een notitie.\nCtrl+Backspace \u2014 woord verwijderen."
 }

@@ -3,7 +3,7 @@
   "key.categories.notely": "Notatnik",
 
   "notely.button.new_note": "Nowa notatka",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Usuń",
 
   "notely.help.title": "Pomoc składni",
-  "notely.help.content": "# Nagłówek H1\n## Nagłówek H2\n### Nagłówek H3\n---\n> Cytat\n`Kod w tekście`\n---\n[ ] Zadanie do zrobienia\n[x] Zadanie wykonane\n---\nZwykły tekst. \uD83D\uDCCC aby przypiąć.\nPPM na notatkę w menu.\nCtrl+Backspace \u2014 usuń słowo."
+  "notely.help.content": "# Nagłówek H1\n## Nagłówek H2\n### Nagłówek H3\n---\n> Cytat\n`Kod w tekście`\n---\n[ ] Zadanie do zrobienia\n[x] Zadanie wykonane\n---\nZwykły tekst. 'P' aby przypiąć.\nPPM na notatkę w menu.\nCtrl+Backspace \u2014 usuń słowo."
 }

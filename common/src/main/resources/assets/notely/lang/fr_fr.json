@@ -3,7 +3,7 @@
   "key.categories.notely": "Bloc-notes",
 
   "notely.button.new_note": "Nouvelle note",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Supprimer",
 
   "notely.help.title": "Aide syntaxe",
-  "notely.help.content": "# Titre H1\n## Titre H2\n### Titre H3\n---\n> Citation\n`Code dans le texte`\n---\n[ ] Tâche non faite\n[x] Tâche faite\n---\nTexte normal. \uD83D\uDCCC pour épingler.\nClic droit sur une note.\nCtrl+Retour \u2014 supprimer un mot."
+  "notely.help.content": "# Titre H1\n## Titre H2\n### Titre H3\n---\n> Citation\n`Code dans le texte`\n---\n[ ] Tâche non faite\n[x] Tâche faite\n---\nTexte normal. 'P' pour épingler.\nClic droit sur une note.\nCtrl+Retour \u2014 supprimer un mot."
 }

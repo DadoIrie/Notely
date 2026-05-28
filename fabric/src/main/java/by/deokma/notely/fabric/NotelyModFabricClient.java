@@ -58,10 +58,10 @@ public class NotelyModFabricClient implements ClientModInitializer {
             }
         });
 
-        HudRenderCallback.EVENT.register((gfx, tickDelta) -> {
+        HudRenderCallback.EVENT.register((poseStack, tickDelta) -> {
             Minecraft mc = Minecraft.getInstance();
             if (!(mc.screen instanceof NotelyScreen)) {
-                PinnedNotesOverlay.render(gfx,
+                PinnedNotesOverlay.render(poseStack,
                     mc.getWindow().getGuiScaledWidth(),
                     mc.getWindow().getGuiScaledHeight());
             }

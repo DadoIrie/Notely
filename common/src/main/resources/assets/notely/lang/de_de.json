@@ -3,7 +3,7 @@
   "key.categories.notely": "Notizbuch",
 
   "notely.button.new_note": "Neue Notiz",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Löschen",
 
   "notely.help.title": "Syntax-Hilfe",
-  "notely.help.content": "# Überschrift H1\n## Überschrift H2\n### Überschrift H3\n---\n> Zitat\n`Code im Text`\n---\n[ ] Aufgabe offen\n[x] Aufgabe erledigt\n---\nNormaler Text. \uD83D\uDCCC zum Anheften.\nRMT auf Notiz im Menü.\nStrg+Rücktaste \u2014 Wort löschen."
+  "notely.help.content": "# Überschrift H1\n## Überschrift H2\n### Überschrift H3\n---\n> Zitat\n`Code im Text`\n---\n[ ] Aufgabe offen\n[x] Aufgabe erledigt\n---\nNormaler Text. 'P' zum Anheften.\nRMT auf Notiz im Menü.\nStrg+Rücktaste \u2014 Wort löschen."
 }

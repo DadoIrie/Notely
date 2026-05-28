@@ -3,7 +3,7 @@
   "key.categories.notely": "記事本",
 
   "notely.button.new_note": "新增筆記",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "刪除",
 
   "notely.help.title": "語法說明",
-  "notely.help.content": "# 標題 H1\n## 標題 H2\n### 標題 H3\n---\n> 引用\n`程式碼文字`\n---\n[ ] 未完成任務\n[x] 已完成任務\n---\n一般文字。點擊 \uD83D\uDCCC 固定。\n在選單中右鍵點擊筆記。\nCtrl+Backspace \u2014 刪除單字。"
+  "notely.help.content": "# 標題 H1\n## 標題 H2\n### 標題 H3\n---\n> 引用\n`程式碼文字`\n---\n[ ] 未完成任務\n[x] 已完成任務\n---\n一般文字。點擊 'P' 固定。\n在選單中右鍵點擊筆記。\nCtrl+Backspace \u2014 刪除單字。"
 }

@@ -3,7 +3,7 @@
   "key.categories.notely": "Notepad",
 
   "notely.button.new_note": "New Note",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Delete",
 
   "notely.help.title": "Syntax Help",
-  "notely.help.content": "# Heading H1\n## Heading H2\n### Heading H3\n---\n> Quote\n`Code in text`\n---\n[ ] Task not completed\n[x] Task completed\n---\nPlain text. Push \uD83D\uDCCC for pin.\nRMB on a note in menu.\nCtrl+Backspace \u2014 clean word."
+  "notely.help.content": "# Heading H1\n## Heading H2\n### Heading H3\n---\n> Quote\n`Code in text`\n---\n[ ] Task not completed\n[x] Task completed\n---\nPlain text. Push 'P' for pin.\nRMB on a note in menu.\nCtrl+Backspace \u2014 clean word."
 }

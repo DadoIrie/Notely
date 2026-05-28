@@ -3,7 +3,7 @@
   "key.categories.notely": "Блокнот",
 
   "notely.button.new_note": "Новая заметка",
-  "notely.button.pin": "\uD83D\uDCCC",
+  "notely.button.pin": "P",
   "notely.button.help": "?",
   "notely.button.close": "X",
 
@@ -20,5 +20,5 @@
   "notely.context.delete": "Удалить",
 
   "notely.help.title": "Справка по синтаксису",
-  "notely.help.content": "# Заголовок H1\n## Заголовок H2\n### Заголовок H3\n---\n> Цитата\n`Код в тексте`\n---\n[ ] Задача не выполнена\n[x] Задача выполнена\n---\nОбычный текст. Нажмите \uD83D\uDCCC для закрепления.\nПКМ по заметке в меню.\nCtrl+Backspace \u2014 удалить слово."
+  "notely.help.content": "# Заголовок H1\n## Заголовок H2\n### Заголовок H3\n---\n> Цитата\n`Код в тексте`\n---\n[ ] Задача не выполнена\n[x] Задача выполнена\n---\nОбычный текст. Нажмите 'P' для закрепления.\nПКМ по заметке в меню.\nCtrl+Backspace \u2014 удалить слово."
 }

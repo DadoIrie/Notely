@@ -5,10 +5,13 @@ import by.deokma.notely.NotelyData.Note;
 import by.deokma.notely.util.MarkdownRenderer;
 import by.deokma.notely.util.MarkdownRenderer.LineType;
 import by.deokma.notely.util.TextCursor;
-import net.minecraft.client.gui.GuiGraphics;
+import by.deokma.notely.compat.GuiGraphics;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
@@ -48,6 +51,10 @@ public class NotelyScreen extends Screen {
     private int ox, oy;
     private int listOffset = 0;
     private int textOffset = 0;
+
+    // ---- Panel scaling (fit-to-screen) ----
+    private float panelScale = 1f;
+    private int originX = 0, originY = 0;
 
     // ---- Cursor ----
     private int cursor = 0;
@@ -90,7 +97,7 @@ public class NotelyScreen extends Screen {
     private final List<Button> colorBtns = new ArrayList<>();
 
     // ---- Textures ----
-    private static final ResourceLocation TEX_NOTEPAD = ResourceLocation.fromNamespaceAndPath("notely", "textures/gui/notepad.png");
+    private static final ResourceLocation TEX_NOTEPAD = new ResourceLocation("notely", "textures/gui/notepad.png");
 
     private static final int MOD_CTRL = 2;
     private static final int MOD_SHIFT = 1;
@@ -100,7 +107,7 @@ public class NotelyScreen extends Screen {
     // =========================================================
 
     public NotelyScreen() {
-        super(Component.empty());
+        super(TextComponent.EMPTY);
         var rng = new java.util.Random(42);
         int cols = (W - LIST_W) / 4 + 2;
         tornTop = new int[cols];
@@ -121,33 +128,40 @@ public class NotelyScreen extends Screen {
 
     @Override
     protected void init() {
-        ox = (width - W) / 2;
-        oy = (height - H) / 2;
+        // Fit the fixed-size panel into the available screen, then draw/position
+        // everything in panel-local coordinates (origin 0,0) under a pose transform.
+        float margin = 4f;
+        panelScale = Math.min(1f, Math.min((width - margin * 2) / (float) W,
+                (height - margin * 2) / (float) H));
+        originX = Math.round((width - W * panelScale) / 2f);
+        originY = Math.round((height - H * panelScale) / 2f);
+        ox = 0;
+        oy = 0;
         colorBtns.clear();
 
         int toolY = oy + TORN + 3;
 
-        btnAdd = addRenderableWidget(Button.builder(
-                Component.translatable("notely.button.new_note"), b -> newNote()
-        ).pos(ox + 3, oy + H - TORN - 18).size(LIST_W - 6, 14).build());
+        btnAdd = addRenderableWidget(new Button(
+                ox + 3, oy + H - TORN - 18, LIST_W - 6, 14,
+                new TranslatableComponent("notely.button.new_note"), b -> newNote()));
 
-        btnPin = addRenderableWidget(Button.builder(
-                Component.translatable("notely.button.pin"), b -> toggleColorPicker()
-        ).pos(ox + W - 34, toolY - 1).size(14, 13).build());
+        btnPin = addRenderableWidget(new Button(
+                ox + W - 34, toolY - 1, 14, 13,
+                new TranslatableComponent("notely.button.pin"), b -> toggleColorPicker()));
 
-        btnHelp = addRenderableWidget(Button.builder(
-                Component.translatable("notely.button.help"), b -> createHelpNote()
-        ).pos(ox + LIST_W - 16, toolY).size(14, 13).build());
+        btnHelp = addRenderableWidget(new Button(
+                ox + LIST_W - 16, toolY - 1, 14, 13,
+                new TranslatableComponent("notely.button.help"), b -> createHelpNote()));
 
-        btnClose = addRenderableWidget(Button.builder(
-                Component.translatable("notely.button.close"), b -> onClose()
-        ).pos(ox + W - 18, toolY - 1).size(15, 13).build());
+        btnClose = addRenderableWidget(new Button(
+                ox + W - 18, toolY - 1, 15, 13,
+                new TranslatableComponent("notely.button.close"), b -> onClose()));
 
         for (int i = 0; i < STICKER_COLORS.length; i++) {
             final int ci = i;
-            Button cb = addRenderableWidget(Button.builder(
-                    Component.literal(" "), b -> pinWithColor(STICKER_COLORS[ci])
-            ).pos(ox + W - 50 - i * 17, toolY + 1).size(15, 11).build());
+            Button cb = addRenderableWidget(new Button(
+                    ox + W - 50 - i * 17, toolY + 1, 15, 11,
+                    new TextComponent(" "), b -> pinWithColor(STICKER_COLORS[ci])));
             cb.visible = false;
             colorBtns.add(cb);
         }
@@ -169,7 +183,7 @@ public class NotelyScreen extends Screen {
 
     private void newNote() {
         Note n = NotelyData.createNote();
-        n.title = Component.translatable("notely.button.new_note").getString();
+        n.title = new TranslatableComponent("notely.button.new_note").getString();
         selected = n;
         cursor = 0;
         textOffset = 0;
@@ -181,8 +195,8 @@ public class NotelyScreen extends Screen {
 
     private void createHelpNote() {
         Note note = NotelyData.createNote();
-        note.title = Component.translatable("notely.help.title").getString();
-        note.content = Component.translatable("notely.help.content").getString();
+        note.title = new TranslatableComponent("notely.help.title").getString();
+        note.content = new TranslatableComponent("notely.help.content").getString();
         selected = note;
         cursor = note.content.length();
         textOffset = 0;
@@ -245,7 +259,8 @@ public class NotelyScreen extends Screen {
     // =========================================================
 
     @Override
-    public void renderBackground(GuiGraphics g, int mx, int my, float dt) {
+    public void renderBackground(PoseStack pose) {
+        // suppress vanilla background
     }
 
     @Override
@@ -645,6 +660,8 @@ public class NotelyScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
+        mx = localX(mx);
+        my = localY(my);
         int ix = (int) mx, iy = (int) my;
 
         if (contextMenuNoteIdx >= 0) {
@@ -784,11 +801,15 @@ public class NotelyScreen extends Screen {
     public boolean mouseReleased(double mx, double my, int btn) {
         draggingContent = false;
         draggingTitle = false;
-        return super.mouseReleased(mx, my, btn);
+        return super.mouseReleased(localX(mx), localY(my), btn);
     }
 
     @Override
     public boolean mouseDragged(double mx, double my, int btn, double dx, double dy) {
+        mx = localX(mx);
+        my = localY(my);
+        dx /= panelScale;
+        dy /= panelScale;
         int ix = (int) mx, iy = (int) my;
         if (draggingContent && selected != null) {
             int newCursor = cursor;
@@ -834,11 +855,13 @@ public class NotelyScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mx, double my, double dx, double dy) {
+    public boolean mouseScrolled(double mx, double my, double delta) {
+        mx = localX(mx);
+        my = localY(my);
         if ((int) mx < ox + LIST_W) {
-            listOffset = Mth.clamp((int) (listOffset - dy), 0, Math.max(0, NotelyData.notes.size() - visibleListRows()));
+            listOffset = Mth.clamp((int) (listOffset - delta), 0, Math.max(0, NotelyData.notes.size() - visibleListRows()));
         } else {
-            textOffset = Mth.clamp((int) (textOffset - dy), 0, Math.max(0, countTextLines() - visibleEditorLines()));
+            textOffset = Mth.clamp((int) (textOffset - delta), 0, Math.max(0, countTextLines() - visibleEditorLines()));
         }
         return true;
     }
@@ -848,13 +871,34 @@ public class NotelyScreen extends Screen {
     // =========================================================
 
     @Override
-    public void render(GuiGraphics g, int mx, int my, float dt) {
+    public void render(PoseStack pose, int mx, int my, float dt) {
+        int lmx = (int) localX(mx);
+        int lmy = (int) localY(my);
+
+        pose.pushPose();
+        pose.translate(originX, originY, 0);
+        pose.scale(panelScale, panelScale, 1f);
+
+        GuiGraphics g = new GuiGraphics(pose);
+        g.setTransform(originX, originY, panelScale);
+
         drawFrame(g);
-        drawList(g, mx, my);
+        drawList(g, lmx, lmy);
         drawEditor(g);
-        super.render(g, mx, my, dt);
+        super.render(pose, lmx, lmy, dt);
         drawColorPickerOverlay(g);
         drawContextMenu(g);
+
+        pose.popPose();
+    }
+
+    // Screen-space -> panel-local coordinate conversion.
+    private double localX(double screenX) {
+        return (screenX - originX) / panelScale;
+    }
+
+    private double localY(double screenY) {
+        return (screenY - originY) / panelScale;
     }
 
     private void drawFrame(GuiGraphics g) {
@@ -877,7 +921,7 @@ public class NotelyScreen extends Screen {
     }
 
     private void drawList(GuiGraphics g, int mx, int my) {
-        g.drawString(font, Component.translatable("notely.list.header").getString(), ox + 4, oy + TORN + 4, MarkdownRenderer.COL_HINT, false);
+        g.drawString(font, new TranslatableComponent("notely.list.header").getString(), ox + 4, oy + TORN + 4, MarkdownRenderer.COL_HINT, false);
 
         int clipY1 = oy + TORN + 14, clipY2 = oy + H - TORN - 20;
         g.enableScissor(ox + 1, clipY1, ox + LIST_W - 1, clipY2);
@@ -897,7 +941,7 @@ public class NotelyScreen extends Screen {
             g.drawString(font, font.plainSubstrByWidth(note.title, maxTW), ox + 5, ry + 6,
                     isSel ? MarkdownRenderer.COL_TEXT : MarkdownRenderer.COL_HINT, false);
             if (pinned)
-                g.drawString(font, Component.translatable("notely.list.pinned_marker").getString(), ox + LIST_W - 10, ry + 6, 0xFFFF8800, false);
+                g.drawString(font, new TranslatableComponent("notely.list.pinned_marker").getString(), ox + LIST_W - 10, ry + 6, 0xFFFF8800, false);
         }
 
         g.disableScissor();
@@ -921,7 +965,7 @@ public class NotelyScreen extends Screen {
         int clipTop = contentY, clipBot = oy + H - TORN - 20;
 
         if (selected == null) {
-            g.drawString(font, Component.translatable("notely.editor.select_note").getString(), ex, contentY + 20, MarkdownRenderer.COL_HINT, false);
+            g.drawString(font, new TranslatableComponent("notely.editor.select_note").getString(), ex, contentY + 20, MarkdownRenderer.COL_HINT, false);
             return;
         }
 
@@ -931,7 +975,7 @@ public class NotelyScreen extends Screen {
         renderedLines.clear();
 
         if (selected.content.isEmpty()) {
-            g.drawString(font, Component.translatable("notely.editor.start_writing").getString(), ex, contentY, MarkdownRenderer.COL_HINT, false);
+            g.drawString(font, new TranslatableComponent("notely.editor.start_writing").getString(), ex, contentY, MarkdownRenderer.COL_HINT, false);
         }
 
         drawContent(g, ex, contentY, clipTop, clipBot);
@@ -954,11 +998,11 @@ public class NotelyScreen extends Screen {
                 int cx = ex + font.width(titleBuffer.substring(0, titleCursor));
                 g.fill(cx, titleY - 1, cx + 1, titleY + 10, MarkdownRenderer.COL_TEXT);
             }
-            g.drawString(font, Component.translatable("notely.editor.rename_hint").getString(), ox + LIST_W + 210, titleY + 1, MarkdownRenderer.COL_HINT, false);
+            g.drawString(font, new TranslatableComponent("notely.editor.rename_hint").getString(), ox + LIST_W + 210, titleY + 1, MarkdownRenderer.COL_HINT, false);
         } else {
             String title = font.plainSubstrByWidth(selected.title, W - LIST_W - 70);
             g.drawString(font, title, ex, titleY + 1, MarkdownRenderer.COL_TEXT, false);
-            g.drawString(font, Component.translatable("notely.editor.click_to_rename").getString(), ex + font.width(title), titleY + 1, MarkdownRenderer.COL_HINT, false);
+            g.drawString(font, new TranslatableComponent("notely.editor.click_to_rename").getString(), ex + font.width(title), titleY + 1, MarkdownRenderer.COL_HINT, false);
         }
     }
 
@@ -1052,9 +1096,9 @@ public class NotelyScreen extends Screen {
         if (contextMenuNoteIdx < 0) return;
         int itemH = 14, menuW = 90;
         String[] items = {
-                Component.translatable("notely.context.open").getString(),
-                Component.translatable("notely.context.rename").getString(),
-                Component.translatable("notely.context.delete").getString()
+                new TranslatableComponent("notely.context.open").getString(),
+                new TranslatableComponent("notely.context.rename").getString(),
+                new TranslatableComponent("notely.context.delete").getString()
         };
         g.fill(contextMenuX - 1, contextMenuY - 1, contextMenuX + menuW + 1, contextMenuY + items.length * itemH + 1, COL_BORDER);
         g.fill(contextMenuX, contextMenuY, contextMenuX + menuW, contextMenuY + items.length * itemH, COL_LIST);
@@ -1074,8 +1118,8 @@ public class NotelyScreen extends Screen {
     private void drawColorPickerOverlay(GuiGraphics g) {
         if (!pickingColor || colorBtns.isEmpty()) return;
         Button first = colorBtns.get(0);
-        int baseX = first.getX();
-        int baseY = first.getY();
+        int baseX = first.x;
+        int baseY = first.y;
         int totalW = STICKER_COLORS.length * 17;
         g.fill(baseX - totalW + 15, baseY - 2, baseX + 15, baseY + 12, 0xDD333333);
         for (int i = 0; i < STICKER_COLORS.length; i++) {

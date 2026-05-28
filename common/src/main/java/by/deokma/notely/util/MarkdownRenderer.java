@@ -1,6 +1,6 @@
 package by.deokma.notely.util;
 
-import net.minecraft.client.gui.GuiGraphics;
+import by.deokma.notely.compat.GuiGraphics;
 import net.minecraft.client.gui.Font;
 
 import java.util.ArrayList;

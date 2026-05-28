@@ -5,8 +5,9 @@ import by.deokma.notely.NotelyData.Note;
 import by.deokma.notely.NotelyData.Sticker;
 import by.deokma.notely.util.MarkdownRenderer;
 import by.deokma.notely.util.MarkdownRenderer.LineType;
+import by.deokma.notely.compat.GuiGraphics;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.List;
 
@@ -28,7 +29,14 @@ public class PinnedNotesOverlay {
     // =========================================================
 
     public static void render(Object gfxObj, int sw, int sh) {
-        if (!(gfxObj instanceof GuiGraphics gfx)) return;
+        GuiGraphics gfx;
+        if (gfxObj instanceof GuiGraphics gg) {
+            gfx = gg;
+        } else if (gfxObj instanceof PoseStack pose) {
+            gfx = new GuiGraphics(pose);
+        } else {
+            return;
+        }
         if (!NotelyData.isInWorld()) return; // don't render in main menu or loading screens
         Minecraft mc = Minecraft.getInstance();
         if (mc.options.hideGui) return; // respect F1 hide HUD

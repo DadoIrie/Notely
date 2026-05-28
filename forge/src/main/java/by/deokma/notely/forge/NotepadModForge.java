@@ -6,9 +6,9 @@ import by.deokma.notely.gui.NotelyScreen;
 import by.deokma.notely.gui.PinnedNotesOverlay;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraftforge.client.ClientRegistry;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.CustomizeGuiOverlayEvent;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
@@ -27,10 +27,11 @@ public class NotepadModForge {
     public NotepadModForge() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::onClientSetup);
-        modBus.addListener(this::onRegisterKeys);
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
+        event.enqueueWork(() -> ClientRegistry.registerKeyBinding(NotelyModClient.createKeyMapping()));
+
         NotelyModClient.init();
         MinecraftForge.EVENT_BUS.addListener(this::onClientTick);
         // Render stickers in-game (no screen) and over chat
@@ -43,10 +44,6 @@ public class NotepadModForge {
         MinecraftForge.EVENT_BUS.addListener(this::onScreenMouseScroll);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggingIn);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggingOut);
-    }
-
-    private void onRegisterKeys(RegisterKeyMappingsEvent event) {
-        event.register(NotelyModClient.createKeyMapping());
     }
 
     // ---- Tick: key + mouse input when no screen is open ----
@@ -82,24 +79,25 @@ public class NotepadModForge {
 
     // ---- Render: in-game HUD (no screen open) ----
 
-    private void onRenderHud(CustomizeGuiOverlayEvent.Chat event) {
+    private void onRenderHud(RenderGameOverlayEvent.Post event) {
+        if (event.getType() != RenderGameOverlayEvent.ElementType.ALL) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen != null) return; // chat screen handled by onRenderScreen
         PinnedNotesOverlay.render(
-                event.getGuiGraphics(),
-                event.getWindow().getGuiScaledWidth(),
-                event.getWindow().getGuiScaledHeight()
+                event.getMatrixStack(),
+                mc.getWindow().getGuiScaledWidth(),
+                mc.getWindow().getGuiScaledHeight()
         );
     }
 
     // ---- Render: over chat screen only ----
 
-    private void onRenderScreen(ScreenEvent.Render.Post event) {
+    private void onRenderScreen(ScreenEvent.DrawScreenEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         if (!NotelyModClient.isStickersAllowedOnScreen(mc)) return;
         if (event.getScreen() instanceof NotelyScreen) return;
         PinnedNotesOverlay.render(
-                event.getGuiGraphics(),
+                event.getPoseStack(),
                 mc.getWindow().getGuiScaledWidth(),
                 mc.getWindow().getGuiScaledHeight()
         );
@@ -107,7 +105,7 @@ public class NotepadModForge {
 
     // ---- Mouse input over chat screen ----
 
-    private void onScreenMousePress(ScreenEvent.MouseButtonPressed.Pre event) {
+    private void onScreenMousePress(ScreenEvent.MouseClickedEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         if (!NotelyModClient.isStickersAllowedOnScreen(mc)) return;
         if (event.getScreen() instanceof NotelyScreen) return;
@@ -119,7 +117,7 @@ public class NotepadModForge {
         }
     }
 
-    private void onScreenMouseRelease(ScreenEvent.MouseButtonReleased.Post event) {
+    private void onScreenMouseRelease(ScreenEvent.MouseReleasedEvent.Post event) {
         if (event.getButton() != 0) return;
         if (mouseWasDown) {
             NotelyModClient.onMouseRelease();
@@ -127,7 +125,7 @@ public class NotepadModForge {
         }
     }
 
-    private void onScreenMouseDrag(ScreenEvent.MouseDragged.Pre event) {
+    private void onScreenMouseDrag(ScreenEvent.MouseDragEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         if (!NotelyModClient.isStickersAllowedOnScreen(mc)) return;
         if (!PinnedNotesOverlay.isDragging()) return;
@@ -135,17 +133,17 @@ public class NotepadModForge {
         event.setCanceled(true);
     }
 
-    private void onScreenMouseScroll(ScreenEvent.MouseScrolled.Pre event) {
+    private void onScreenMouseScroll(ScreenEvent.MouseScrollEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         if (!NotelyModClient.isStickersAllowedOnScreen(mc)) return;
         boolean handled = PinnedNotesOverlay.handleScrollScaled(
-                event.getMouseX(), event.getMouseY(), event.getDeltaY(), mc);
+                event.getMouseX(), event.getMouseY(), event.getScrollDelta(), mc);
         if (handled) event.setCanceled(true);
     }
 
     // ---- World join/leave ----
 
-    private void onPlayerLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+    private void onPlayerLoggingIn(ClientPlayerNetworkEvent.LoggedInEvent event) {
         Minecraft mc = Minecraft.getInstance();
         ServerData server = mc.getCurrentServer();
         if (server != null) {
@@ -162,7 +160,7 @@ public class NotepadModForge {
         }
     }
 
-    private void onPlayerLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+    private void onPlayerLoggingOut(ClientPlayerNetworkEvent.LoggedOutEvent event) {
         NotelyModClient.onLeave();
     }
 }
