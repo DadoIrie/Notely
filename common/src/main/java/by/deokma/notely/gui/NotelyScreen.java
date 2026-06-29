@@ -80,8 +80,15 @@ public class NotelyScreen extends Screen {
     private final ArrayDeque<String> titleUndoStack = new ArrayDeque<>();
 
     // ---- Rendered lines cache (rebuilt each frame) ----
-    private record RenderedLine(int charStart, int charEnd, int screenY, LineType type, String raw) {
-    }
+    private record RenderedLine(
+            int charStart,   // logical start of the raw line (kept for compatibility)
+            int charEnd,     // logical end of the raw line (kept)
+            int segOffset,   // new: char offset of this wrapped segment inside the logical line
+            int segLength,   // new
+            int screenY,
+            LineType type,
+            String raw
+    ) {}
 
     private final List<RenderedLine> renderedLines = new ArrayList<>();
 
@@ -299,6 +306,10 @@ public class NotelyScreen extends Screen {
             cursor = t.length();
             return true;
         }
+        if (ctrl && key == GLFW.GLFW_KEY_C) {
+            copySelectionToClipboard();
+            return true;
+        }
 
         switch (key) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
@@ -385,6 +396,7 @@ public class NotelyScreen extends Screen {
                 typeChar('\t');
                 return true;
             }
+
         }
         return super.keyPressed(key, scan, mods);
     }
@@ -544,6 +556,14 @@ public class NotelyScreen extends Screen {
         pushUndo();
         selected.content = t.substring(0, cursor) + clip + t.substring(cursor);
         cursor += clip.length();
+    }
+
+    private void copySelectionToClipboard() {
+        if (!hasSelection()) return;
+        String t = selected.content;
+        int lo = selMin(), hi = selMax();
+        String selectedText = t.substring(lo, hi);
+        minecraft.keyboardHandler.setClipboard(selectedText);
     }
 
     // =========================================================
@@ -757,16 +777,25 @@ public class NotelyScreen extends Screen {
         int textX = ox + LIST_W + 22 + MarkdownRenderer.getTextXOffset(rl.type());
         String display = MarkdownRenderer.getDisplayText(rl.raw(), rl.type());
         int relX = mx - textX;
-        if (relX <= 0) return rl.charStart() + MarkdownRenderer.prefixLen(rl.type());
-        for (int i = 0; i <= display.length(); i++) {
-            int w = font.width(display.substring(0, i));
+
+        if (relX <= 0) {
+            return rl.charStart() + MarkdownRenderer.prefixLen(rl.type());
+        }
+
+        String relevant = display.substring(rl.segOffset());
+        int localPos = relevant.length();
+
+        for (int i = 0; i <= relevant.length(); i++) {
+            int w = font.width(relevant.substring(0, i));
             if (w >= relX) {
-                int wPrev = i > 0 ? font.width(display.substring(0, i - 1)) : 0;
+                int wPrev = i > 0 ? font.width(relevant.substring(0, i - 1)) : 0;
                 int chosen = (relX - wPrev < w - relX) ? i - 1 : i;
-                return rl.charStart() + MarkdownRenderer.prefixLen(rl.type()) + Math.max(0, chosen);
+                localPos = chosen;
+                break;
             }
         }
-        return rl.charEnd();
+
+        return rl.charStart() + rl.segOffset() + localPos;
     }
 
     private void toggleTodo(int lineCharStart) {
@@ -801,8 +830,10 @@ public class NotelyScreen extends Screen {
             // Clamp to first/last line if dragging outside
             if (iy < oy + TORN + 32 && !renderedLines.isEmpty())
                 newCursor = renderedLines.get(0).charStart();
-            else if (iy >= oy + H - TORN - 20 && !renderedLines.isEmpty())
-                newCursor = renderedLines.get(renderedLines.size() - 1).charEnd();
+            else if (iy >= oy + H - TORN - 20 && !renderedLines.isEmpty()) {
+                RenderedLine last = renderedLines.get(renderedLines.size() - 1);
+                newCursor = last.charStart() + last.segOffset() + last.segLength();
+            }
 
             if (selectionStart < 0) selectionStart = cursor;
             cursor = newCursor;
@@ -988,39 +1019,46 @@ public class NotelyScreen extends Screen {
 
             for (int wi = 0; wi < wrapped.size(); wi++) {
                 String seg = wrapped.get(wi);
-                int segCharStart = ci;
-                int segCharEnd = ci + raw.length();
+
+                String beforeThisSeg = String.join("", wrapped.subList(0, wi));
+                int segOffset = beforeThisSeg.length();
+
+                int segCharStart = ci + segOffset;
+                int segCharEnd = segCharStart + seg.length();
 
                 if (dy >= clipTop - LINE_H && dy <= clipBot) {
-                    renderedLines.add(new RenderedLine(segCharStart, segCharEnd, dy, type, raw));
+                    renderedLines.add(new RenderedLine(ci, ci + raw.length(), segOffset, seg.length(), dy, type, raw));
+
                     if (cursorOnThisLine) {
                         g.fill(ex - 2, dy - 1, ex + maxW, dy + LINE_H, 0x18000000);
                     }
+
                     // Selection highlight
                     if (hasSelection()) {
                         int lo = selMin(), hi = selMax();
-                        int lineStart = segCharStart;
-                        int lineEnd = segCharEnd;
-                        if (lo < lineEnd && hi > lineStart) {
-                            int selLo = Math.max(lo, lineStart) - lineStart;
-                            int selHi = Math.min(hi, lineEnd) - lineStart;
-                            String rawSub = raw.substring(0, Math.min(raw.length(), lineEnd - lineStart));
-                            int x1 = ex + xOff + font.width(rawSub.substring(0, Math.min(selLo, rawSub.length())));
-                            int x2 = ex + xOff + font.width(rawSub.substring(0, Math.min(selHi, rawSub.length())));
+                        if (lo < segCharEnd && hi > segCharStart) {
+                            int localLo = Math.max(lo, segCharStart) - segCharStart;
+                            int localHi = Math.min(hi, segCharEnd) - segCharStart;
+                            String segDisplay = seg.substring(0, Math.min(localHi, seg.length()));
+                            int x1 = ex + xOff + font.width(seg.substring(0, localLo));
+                            int x2 = ex + xOff + font.width(segDisplay);
                             g.fill(x1, dy, x2, dy + LINE_H - 1, 0x664488FF);
                         }
                     }
+
                     MarkdownRenderer.drawLine(g, font, seg, ex + xOff, dy, renderType, maxW);
                 }
 
-                // Draw cursor
-                if (!renamingTitle && cursorVisible && cursor >= ci && cursor <= ci + raw.length()) {
+                // Cursor drawing — now correct per segment
+                if (!renamingTitle && cursorVisible && cursor >= segCharStart && cursor <= segCharEnd) {
                     int prefixOffset = cursorOnThisLine ? 0 : MarkdownRenderer.prefixLen(type);
-                    int posInDisplay = Math.max(0, cursor - ci - prefixOffset);
-                    if (posInDisplay <= display.length() && dy >= clipTop && dy <= clipBot) {
-                        String beforeCursor = font.plainSubstrByWidth(display.substring(0, posInDisplay), maxW);
-                        int cx = ex + xOff + font.width(beforeCursor);
-                        g.fill(cx, dy - 1, cx + 1, dy + font.lineHeight, MarkdownRenderer.COL_TEXT);
+                    int posInSeg = cursor - segCharStart - prefixOffset;
+                    if (posInSeg >= 0 && posInSeg <= seg.length() && dy >= clipTop && dy <= clipBot) {
+                        if (!(posInSeg == seg.length() && wi < wrapped.size() - 1)) {
+                            String beforeCursor = font.plainSubstrByWidth(seg.substring(0, Math.min(posInSeg, seg.length())), maxW);
+                            int cx = ex + xOff + font.width(beforeCursor);
+                            g.fill(cx, dy - 1, cx + 1, dy + font.lineHeight, MarkdownRenderer.COL_TEXT);
+                        }
                     }
                 }
 
