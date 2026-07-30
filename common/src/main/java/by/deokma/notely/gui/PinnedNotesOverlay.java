@@ -48,73 +48,85 @@ public class PinnedNotesOverlay {
         int bodyColor = (alpha << 24) | (s.color & 0x00FFFFFF);
         int headerColor = (alpha << 24) | (darken(s.color, 0.82f) & 0x00FFFFFF);
 
-        // Shadow + body
         gfx.fill(x + 3, y + 3, x + w + 3, y + h + 3, s.transparent ? 0x22000000 : 0x44000000);
         gfx.fill(x, y, x + w, y + h, bodyColor);
         gfx.fill(x, y, x + w, y + HEADER, headerColor);
 
-        // Close button
         int cx = x + w - HEADER + 1;
         boolean closeHov = mx >= cx && mx < x + w && my >= y && my < y + HEADER;
         if (closeHov) gfx.fill(cx, y + 1, x + w - 1, y + HEADER - 1, 0xAAFF4444);
         gfx.drawString(mc.font, "x", cx + 2, y + 3, closeHov ? 0xFFFFFFFF : 0xFF555555, false);
 
-        // Transparency toggle button
         int tx2 = cx - HEADER;
         boolean transHov = mx >= tx2 && mx < cx && my >= y && my < y + HEADER;
         int transColor = s.transparent ? 0xFF4488CC : 0xFF888888;
         if (transHov) gfx.fill(tx2, y + 1, cx - 1, y + HEADER - 1, 0x44FFFFFF);
         gfx.drawString(mc.font, s.transparent ? "o" : "O", tx2 + 2, y + 3, transColor, false);
 
-        // Title
         String title = note != null ? mc.font.plainSubstrByWidth(note.title, w - HEADER * 2 - 6) : "?";
         gfx.drawString(mc.font, title, x + 4, y + 3, 0xFF333333, false);
 
-        // Ruled lines
         for (int row = 0; row < (h - HEADER) / LINE_H; row++) {
             int ly = y + HEADER + PAD + row * LINE_H + LINE_H - 2;
             if (ly < y + h - 4) gfx.fill(x + PAD, ly, x + w - PAD, ly + 1, 0x22000000);
         }
 
-        // Content
         if (note != null && !note.content.isEmpty()) {
-            String[] lines = note.content.split("\n");
+            String[] lines = note.content.split("\n", -1);
             int lineH = Math.max(1, (int) (LINE_H * s.fontSize));
             int visibleLines = (h - HEADER - PAD * 2) / lineH;
-            int maxScroll = Math.max(0, lines.length - visibleLines);
+            int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
+
+            int totalRows = 0;
+            for (String raw : lines) {
+                LineType type = MarkdownRenderer.detectLineType(raw);
+                String display = MarkdownRenderer.getDisplayText(raw, type);
+                int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
+                totalRows += Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+            }
+
+            int maxScroll = Math.max(0, totalRows - visibleLines);
             s.scrollOffset = Math.max(0, Math.min(s.scrollOffset, maxScroll));
 
             gfx.enableScissor(x, y + HEADER, x + w, y + h - 4);
 
-            // Apply font scale
             var pose = gfx.pose();
             pose.pushPose();
             pose.translate(x + PAD, y + HEADER + PAD, 0);
             pose.scale(s.fontSize, s.fontSize, 1.0f);
 
-            int ty = 0;
-            for (int li = s.scrollOffset; li < lines.length; li++) {
-                if (ty + LINE_H > (int) ((h - HEADER - PAD * 2) / s.fontSize)) break;
-                // Draw line at scaled coordinates (origin shifted to x+PAD, y+HEADER+PAD)
-                drawStickerLineScaled(gfx, mc, s, lines[li], 0, ty, (int) ((w - PAD * 2) / s.fontSize), mx - x - PAD, my - y - HEADER - PAD, alpha);
-                ty += LINE_H;
+            int ty = -s.scrollOffset * LINE_H;
+            for (int li = 0; li < lines.length; li++) {
+                if (ty > (int) ((h - HEADER - PAD * 2) / s.fontSize)) break;
+                String raw = lines[li];
+                LineType type = MarkdownRenderer.detectLineType(raw);
+                String display = MarkdownRenderer.getDisplayText(raw, type);
+                int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
+                List<String> wrapped = MarkdownRenderer.wrapLine(mc.font, display, lineMaxW);
+                if (wrapped.isEmpty()) wrapped.add("");
+                boolean firstSeg = true;
+                for (String seg : wrapped) {
+                    if (ty >= -LINE_H && ty <= (int) ((h - HEADER - PAD * 2) / s.fontSize)) {
+                        drawStickerLineScaled(gfx, mc, s, seg, type, firstSeg, 0, ty, lineMaxW, mx - x - PAD, my - y - HEADER - PAD, alpha);
+                    }
+                    ty += LINE_H;
+                    firstSeg = false;
+                }
             }
 
             pose.popPose();
             gfx.disableScissor();
 
-            // Scrollbar
-            if (lines.length > visibleLines) {
+            if (totalRows > visibleLines) {
                 float scroll = maxScroll > 0 ? (float) s.scrollOffset / maxScroll : 0;
                 int barH = h - HEADER - 8;
-                int thumbH = Math.max(6, barH * visibleLines / lines.length);
+                int thumbH = Math.max(6, barH * visibleLines / totalRows);
                 int thumbY = y + HEADER + 4 + (int) ((barH - thumbH) * scroll);
                 gfx.fill(x + w - 4, y + HEADER + 4, x + w - 2, y + h - 4, 0x33000000);
                 gfx.fill(x + w - 4, thumbY, x + w - 2, thumbY + thumbH, 0x88000000);
             }
         }
 
-        // Resize handle
         int rx = x + w - 8, ry = y + h - 8;
         boolean resHov = mx >= rx && mx < x + w && my >= ry && my < y + h;
         gfx.fill(rx, ry, x + w, y + h, resHov ? 0x88000000 : 0x33000000);
@@ -125,57 +137,51 @@ public class PinnedNotesOverlay {
     }
 
     private static void drawStickerLineScaled(GuiGraphics gfx, Minecraft mc, Sticker s,
-                                              String line, int x, int ty, int maxW, int relMx, int relMy, int alpha) {
+                                              String seg, LineType type, boolean firstSeg, int x, int ty, int maxW, int relMx, int relMy, int alpha) {
         // Reuse drawStickerLine with fake absolute coords — pass 0,0 as sticker origin
         // and adjust: x=0, ty=ty, w=maxW+PAD*2 (we already translated)
-        drawStickerLine(gfx, mc, s, line, -PAD, ty, maxW + PAD * 2, relMx, relMy, alpha);
+        drawStickerLine(gfx, mc, s, seg, type, firstSeg, -PAD, ty, maxW + PAD * 2, relMx, relMy, alpha);
     }
 
     private static void drawStickerLine(GuiGraphics gfx, Minecraft mc, Sticker s,
-                                        String line, int x, int ty, int w, int mx, int my, int alpha) {
+                                        String seg, LineType type, boolean firstSeg, int x, int ty, int w, int mx, int my, int alpha) {
         int ink = (alpha << 24) | 0x001A0A00;
-        LineType type = MarkdownRenderer.detectLineType(line);
-        int maxW = w - PAD * 2;
-
         switch (type) {
             case H1 -> {
-                String t = mc.font.plainSubstrByWidth(line.substring(2), maxW);
-                gfx.drawString(mc.font, t, x + PAD, ty, (alpha << 24) | 0x003A2000, false);
-                gfx.fill(x + PAD, ty + LINE_H - 1, x + PAD + mc.font.width(t), ty + LINE_H, (alpha << 24) | 0x003A2000);
+                gfx.drawString(mc.font, seg, x + PAD, ty, (alpha << 24) | 0x003A2000, false);
+                gfx.fill(x + PAD, ty + LINE_H - 1, x + PAD + mc.font.width(seg), ty + LINE_H, (alpha << 24) | 0x003A2000);
             }
-            case H2 ->
-                    gfx.drawString(mc.font, mc.font.plainSubstrByWidth(line.substring(3), maxW), x + PAD, ty, (alpha << 24) | 0x005A3800, false);
-            case H3 ->
-                    gfx.drawString(mc.font, mc.font.plainSubstrByWidth(line.substring(4), maxW), x + PAD, ty, (alpha << 24) | 0x009B8A6A, false);
+            case H2 -> gfx.drawString(mc.font, seg, x + PAD, ty, (alpha << 24) | 0x005A3800, false);
+            case H3 -> gfx.drawString(mc.font, seg, x + PAD, ty, (alpha << 24) | 0x009B8A6A, false);
             case HR -> {
                 int mid = ty + LINE_H / 2;
                 gfx.fill(x + PAD, mid, x + w - PAD, mid + 1, (alpha << 24) | 0x008B7355);
             }
             case QUOTE -> {
                 gfx.fill(x + PAD, ty, x + PAD + 2, ty + LINE_H - 1, (alpha << 24) | 0x008B7355);
-                gfx.drawString(mc.font, mc.font.plainSubstrByWidth(line.substring(2), maxW - 4), x + PAD + 4, ty, (alpha << 24) | 0x007A6A50, false);
+                gfx.drawString(mc.font, seg, x + PAD + 4, ty, (alpha << 24) | 0x007A6A50, false);
             }
             case CODE -> {
-                String code = line.substring(1, line.length() - 1);
-                String fit = mc.font.plainSubstrByWidth(code, maxW - 4);
-                gfx.fill(x + PAD - 1, ty - 1, x + PAD + mc.font.width(fit) + 3, ty + LINE_H, 0x22000000);
-                gfx.drawString(mc.font, fit, x + PAD + 1, ty, (alpha << 24) | 0x004A7A30, false);
+                gfx.fill(x + PAD - 1, ty - 1, x + PAD + mc.font.width(seg) + 3, ty + LINE_H, 0x22000000);
+                gfx.drawString(mc.font, seg, x + PAD + 1, ty, (alpha << 24) | 0x004A7A30, false);
             }
             case TODO_OPEN, TODO_DONE ->
-                    drawStickerTodo(gfx, mc, s, line, x, ty, w, mx, my, alpha, ink, type == LineType.TODO_DONE);
-            default -> gfx.drawString(mc.font, mc.font.plainSubstrByWidth(line, maxW), x + PAD, ty, ink, false);
+                    drawStickerTodo(gfx, mc, s, seg, type == LineType.TODO_DONE, firstSeg, x, ty, w, mx, my, alpha, ink);
+            default -> gfx.drawString(mc.font, seg, x + PAD, ty, ink, false);
         }
     }
 
     private static void drawStickerTodo(GuiGraphics gfx, Minecraft mc, Sticker s,
-                                        String line, int x, int ty, int w, int mx, int my, int alpha, int ink, boolean done) {
-        MarkdownRenderer.drawCheckbox(gfx, x + PAD, ty, done);
-        boolean hov = mx >= x + PAD && mx < x + PAD + 9 && my >= ty && my < ty + 7;
-        if (hov) gfx.fill(x + PAD - 1, ty - 1, x + PAD + 8, ty + 8, 0x44FFFFFF);
-        String todoText = mc.font.plainSubstrByWidth(line.substring(4), w - PAD * 2 - 10);
+                                        String seg, boolean done, boolean firstSeg, int x, int ty, int w, int mx, int my, int alpha, int ink) {
+        int textX = x + PAD + 10;
+        if (firstSeg) {
+            MarkdownRenderer.drawCheckbox(gfx, x + PAD, ty, done);
+            boolean hov = mx >= x + PAD && mx < x + PAD + 9 && my >= ty && my < ty + 7;
+            if (hov) gfx.fill(x + PAD - 1, ty - 1, x + PAD + 8, ty + 8, 0x44FFFFFF);
+        }
         int todoColor = done ? (alpha << 24) | 0x00888877 : ink;
-        gfx.drawString(mc.font, todoText, x + PAD + 10, ty, todoColor, false);
-        if (done) gfx.fill(x + PAD + 10, ty + 4, x + PAD + 10 + mc.font.width(todoText), ty + 5, todoColor);
+        gfx.drawString(mc.font, seg, textX, ty, todoColor, false);
+        if (done) gfx.fill(textX, ty + 4, textX + mc.font.width(seg), ty + 5, todoColor);
     }
 
     // =========================================================
@@ -250,21 +256,25 @@ public class PinnedNotesOverlay {
         Note note = NotelyData.findNote(s.noteId);
         if (note == null) return false;
 
-        int x = (int) s.x, y = (int) s.y, h = (int) s.height;
-        String[] lines = note.content.split("\n");
+        int x = (int) s.x, y = (int) s.y, w = (int) s.width, h = (int) s.height;
+        String[] lines = note.content.split("\n", -1);
         int lineH = Math.max(1, (int) (LINE_H * s.fontSize));
-        int ty = y + HEADER + PAD;
+        int ty = y + HEADER + PAD - s.scrollOffset * lineH;
         int ci = 0;
 
-        // Skip lines above scroll offset
-        for (int li = 0; li < s.scrollOffset && li < lines.length; li++) {
-            ci += lines[li].length() + 1;
-        }
+        Minecraft mc = Minecraft.getInstance();
+        int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
 
-        for (int li = s.scrollOffset; li < lines.length; li++) {
-            if (ty + lineH > y + h - 4) break;
+        for (int li = 0; li < lines.length; li++) {
+            if (ty > y + h - 4) break;
             String line = lines[li];
-            if (line.startsWith("[ ] ") || line.startsWith("[x] ")) {
+
+            LineType type = MarkdownRenderer.detectLineType(line);
+            String display = MarkdownRenderer.getDisplayText(line, type);
+            int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
+            int segCount = Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+
+            if (ty + lineH > y + HEADER && (line.startsWith("[ ] ") || line.startsWith("[x] "))) {
                 if (mx >= x + PAD && mx < x + PAD + 9 && my >= ty && my < ty + 8) {
                     if (ci + 4 <= note.content.length()) {
                         String before = note.content.substring(0, ci);
@@ -276,8 +286,9 @@ public class PinnedNotesOverlay {
                     return true;
                 }
             }
+
             ci += line.length() + 1;
-            ty += lineH;
+            ty += lineH * segCount;
         }
         return false;
     }
@@ -329,7 +340,6 @@ public class PinnedNotesOverlay {
     }
 
     private static boolean handleScrollAt(int mx, int my, double delta, Minecraft mc) {
-        // Check if Ctrl is held
         long win = mc.getWindow().getWindow();
         boolean ctrl = org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS
                 || org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
@@ -347,10 +357,20 @@ public class PinnedNotesOverlay {
                 if (my < y + HEADER) continue;
                 Note note = NotelyData.findNote(s.noteId);
                 if (note == null) continue;
+
                 int lineH = (int) (LINE_H * s.fontSize);
-                int lines = note.content.split("\n", -1).length;
+                int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
+
+                int totalRows = 0;
+                for (String raw : note.content.split("\n", -1)) {
+                    LineType type = MarkdownRenderer.detectLineType(raw);
+                    String display = MarkdownRenderer.getDisplayText(raw, type);
+                    int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
+                    totalRows += Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+                }
+
                 int visibleLines = (h - HEADER - PAD * 2) / Math.max(1, lineH);
-                int maxScroll = Math.max(0, lines - visibleLines);
+                int maxScroll = Math.max(0, totalRows - visibleLines);
                 s.scrollOffset = Math.max(0, Math.min(s.scrollOffset - (int) delta, maxScroll));
             }
             return true;

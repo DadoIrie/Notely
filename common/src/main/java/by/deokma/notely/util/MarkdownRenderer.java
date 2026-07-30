@@ -87,7 +87,7 @@ public final class MarkdownRenderer {
      * @param editorMaxW width of the editor area (for HR line)
      */
     public static void drawLine(GuiGraphics g, Font font, String seg,
-                                int x, int y, LineType type, int editorMaxW) {
+                                int x, int y, LineType type, int editorMaxW, boolean firstSeg) {
         switch (type) {
             case H1 -> {
                 g.drawString(font, seg, x, y, COL_H1, false);
@@ -96,11 +96,11 @@ public final class MarkdownRenderer {
             case H2 -> g.drawString(font, seg, x, y, COL_H2, false);
             case H3 -> g.drawString(font, seg, x, y, COL_HINT, false);
             case TODO_OPEN -> {
-                drawCheckbox(g, x - 11, y, false);
+                if (firstSeg) drawCheckbox(g, x - 11, y, false);
                 g.drawString(font, seg, x, y, COL_TEXT, false);
             }
             case TODO_DONE -> {
-                drawCheckbox(g, x - 11, y, true);
+                if (firstSeg) drawCheckbox(g, x - 11, y, true);
                 g.drawString(font, seg, x, y, 0xFF888877, false);
                 g.fill(x, y + 2, x + font.width(seg), y + 2, 0xFF888877);
             }

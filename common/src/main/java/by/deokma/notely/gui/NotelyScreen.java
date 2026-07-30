@@ -37,7 +37,7 @@ public class NotelyScreen extends Screen {
 
     static final int[] STICKER_COLORS = {
             0xFFFFF176, 0xFFFFCC80, 0xFFA5D6A7,
-            0xFF90CAF9, 0xFFCE93D8, 0xFFEF9A9A
+            0xFF90CAF9, 0xFFCE93D8, 0xFFEF9A9A, 0xFFCCCCCC
     };
 
     // ---- Torn-paper edge ----
@@ -48,6 +48,7 @@ public class NotelyScreen extends Screen {
     private int ox, oy;
     private int listOffset = 0;
     private int textOffset = 0;
+    private int scrollTarget = 0;
 
     // ---- Cursor ----
     private int cursor = 0;
@@ -116,10 +117,7 @@ public class NotelyScreen extends Screen {
             tornTop[i] = rng.nextInt(TORN);
             tornBot[i] = rng.nextInt(TORN);
         }
-        if (!NotelyData.notes.isEmpty()) {
-            selected = NotelyData.notes.get(0);
-            cursor = selected.content.length();
-        }
+        if (!NotelyData.notes.isEmpty()) selected = NotelyData.notes.get(0);
     }
 
     // =========================================================
@@ -180,6 +178,7 @@ public class NotelyScreen extends Screen {
         selected = n;
         cursor = 0;
         textOffset = 0;
+        scrollTarget = 0;
         renamingTitle = true;
         titleBuffer = n.title;
         titleCursor = titleBuffer.length();
@@ -191,8 +190,9 @@ public class NotelyScreen extends Screen {
         note.title = Component.translatable("notely.help.title").getString();
         note.content = Component.translatable("notely.help.content").getString();
         selected = note;
-        cursor = note.content.length();
+        cursor = 0;
         textOffset = 0;
+        scrollTarget = 0;
         renamingTitle = false;
         NotelyData.save();
         refreshWidgets();
@@ -211,8 +211,9 @@ public class NotelyScreen extends Screen {
     private void openNote(Note note) {
         if (selected != null) NotelyData.save();
         selected = note;
-        cursor = note.content.length();
+        cursor = 0;
         textOffset = 0;
+        scrollTarget = 0;
         renamingTitle = false;
         pickingColor = false;
         refreshWidgets();
@@ -247,6 +248,23 @@ public class NotelyScreen extends Screen {
         NotelyData.save();
     }
 
+    private void renameTitle() {
+        renamingTitle = true;
+        titleBuffer = selected.title;
+        titleCursor = titleBuffer.length();
+        titleSelStart = -1;
+        titleUndoStack.clear();
+    }
+
+    private void cycleNote(int dir) {
+        List<Note> notes = NotelyData.notes;
+        if (notes.size() <= 1) return;
+        if (renamingTitle) commitRename();
+        int idx = notes.indexOf(selected);
+        int next = idx < 0 ? (dir > 0 ? 0 : notes.size() - 1) : Math.floorMod(idx + dir, notes.size());
+        openNote(notes.get(next));
+    }
+
     // =========================================================
     // Lifecycle
     // =========================================================
@@ -268,6 +286,9 @@ public class NotelyScreen extends Screen {
             cursorTimer = 0;
             cursorVisible = !cursorVisible;
         }
+        int diff = scrollTarget - textOffset;
+        int step = Math.max(1, Math.abs(diff) / 2);
+        textOffset += Mth.clamp(diff, -step, step);
     }
 
     @Override
@@ -286,12 +307,18 @@ public class NotelyScreen extends Screen {
             return true;
         }
 
+        boolean ctrl = (mods & MOD_CTRL) != 0;
+        boolean shift = (mods & MOD_SHIFT) != 0;
+
+        if (ctrl && key == GLFW.GLFW_KEY_TAB) {
+            cycleNote(shift ? -1 : 1);
+            return true;
+        }
+
         if (renamingTitle) return handleTitleKey(key, mods);
         if (selected == null) return super.keyPressed(key, scan, mods);
 
         String t = selected.content;
-        boolean ctrl = (mods & MOD_CTRL) != 0;
-        boolean shift = (mods & MOD_SHIFT) != 0;
 
         if (ctrl && key == GLFW.GLFW_KEY_Z) {
             undo();
@@ -303,7 +330,7 @@ public class NotelyScreen extends Screen {
         }
         if (ctrl && key == GLFW.GLFW_KEY_A) {
             selectionStart = 0;
-            cursor = t.length();
+            setContentCursor(t.length());
             return true;
         }
         if (ctrl && key == GLFW.GLFW_KEY_C) {
@@ -321,10 +348,10 @@ public class NotelyScreen extends Screen {
                 if (ctrl) {
                     int p = TextCursor.wordBoundaryLeft(t, cursor);
                     selected.content = t.substring(0, p) + t.substring(cursor);
-                    cursor = p;
+                    setContentCursor(p);
                 } else if (cursor > 0) {
                     selected.content = t.substring(0, cursor - 1) + t.substring(cursor);
-                    cursor--;
+                    setContentCursor(cursor - 1);
                 }
                 return true;
             }
@@ -344,47 +371,54 @@ public class NotelyScreen extends Screen {
             }
             case GLFW.GLFW_KEY_LEFT -> {
                 if (!shift && hasSelection()) {
-                    cursor = selMin();
+                    setContentCursor(selMin());
                     selectionStart = -1;
                 } else {
                     if (shift && !hasSelection()) selectionStart = cursor;
-                    cursor = ctrl ? TextCursor.wordBoundaryLeft(t, cursor) : Math.max(0, cursor - 1);
+                    setContentCursor(ctrl ? TextCursor.wordBoundaryLeft(t, cursor) : cursor - 1);
                     if (shift && cursor == selectionStart) selectionStart = -1;
                 }
                 return true;
             }
             case GLFW.GLFW_KEY_RIGHT -> {
                 if (!shift && hasSelection()) {
-                    cursor = selMax();
+                    setContentCursor(selMax());
                     selectionStart = -1;
                 } else {
                     if (shift && !hasSelection()) selectionStart = cursor;
-                    cursor = ctrl ? TextCursor.wordBoundaryRight(t, cursor) : Math.min(t.length(), cursor + 1);
+                    setContentCursor(ctrl ? TextCursor.wordBoundaryRight(t, cursor) : cursor + 1);
                     if (shift && cursor == selectionStart) selectionStart = -1;
                 }
                 return true;
             }
             case GLFW.GLFW_KEY_UP -> {
                 if (shift && !hasSelection()) selectionStart = cursor;
-                cursor = TextCursor.moveVertically(t, cursor, -1);
+                int target = -1;
+                if (ctrl) {
+                    target = t.lastIndexOf("\n#", cursor - 2);
+                    if (target != -1) target++;
+                    else if (t.startsWith("#") && cursor > 0) target = 0;
+                }
+                setContentCursor(target != -1 ? target : TextCursor.moveVertically(t, cursor, -1));
                 if (!shift) selectionStart = -1;
                 return true;
             }
             case GLFW.GLFW_KEY_DOWN -> {
                 if (shift && !hasSelection()) selectionStart = cursor;
-                cursor = TextCursor.moveVertically(t, cursor, 1);
+                int target = ctrl ? t.indexOf("\n#", cursor) : -1;
+                setContentCursor(target != -1 ? target + 1 : TextCursor.moveVertically(t, cursor, 1));
                 if (!shift) selectionStart = -1;
                 return true;
             }
             case GLFW.GLFW_KEY_HOME -> {
                 if (shift && !hasSelection()) selectionStart = cursor;
-                cursor = ctrl ? 0 : TextCursor.lineStart(t, cursor);
+                setContentCursor(ctrl ? 0 : TextCursor.lineStart(t, cursor));
                 if (!shift) selectionStart = -1;
                 return true;
             }
             case GLFW.GLFW_KEY_END -> {
                 if (shift && !hasSelection()) selectionStart = cursor;
-                cursor = ctrl ? t.length() : TextCursor.lineEnd(t, cursor);
+                setContentCursor(ctrl ? t.length() : TextCursor.lineEnd(t, cursor));
                 if (!shift) selectionStart = -1;
                 return true;
             }
@@ -393,7 +427,8 @@ public class NotelyScreen extends Screen {
                 return true;
             }
             case GLFW.GLFW_KEY_TAB -> {
-                typeChar('\t');
+                if (shift) renameTitle();
+                else insertText("    ");
                 return true;
             }
 
@@ -492,6 +527,13 @@ public class NotelyScreen extends Screen {
                 if (ctrl) undoTitle();
                 return true;
             }
+            case GLFW.GLFW_KEY_TAB -> {
+                if (!shift) {
+                    commitRename();
+                    setContentCursor(0);
+                }
+                return true;
+            }
         }
         return true;
     }
@@ -532,11 +574,18 @@ public class NotelyScreen extends Screen {
     }
 
     private void typeChar(char c) {
+        insertText(String.valueOf(c));
+    }
+
+    private void insertText(String s) {
         if (hasSelection()) deleteSelection();
-        if (selected.content.length() >= NotelyData.MAX_CONTENT_LENGTH) return;
+        if (s.isEmpty()) return;
+        int available = NotelyData.MAX_CONTENT_LENGTH - selected.content.length();
+        if (available <= 0) return;
+        if (s.length() > available) s = s.substring(0, available);
         pushUndo();
-        selected.content = selected.content.substring(0, cursor) + c + selected.content.substring(cursor);
-        cursor++;
+        selected.content = selected.content.substring(0, cursor) + s + selected.content.substring(cursor);
+        setContentCursor(cursor + s.length());
     }
 
     private void pasteFromClipboard() {
@@ -547,15 +596,9 @@ public class NotelyScreen extends Screen {
         clip = clip.chars()
                 .filter(c -> c == '\n' || c == '\t' || (c >= 32 && c != 127))
                 .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-                .toString();
-        if (clip.isEmpty()) return;
-        String t = selected.content;
-        int available = NotelyData.MAX_CONTENT_LENGTH - t.length();
-        if (available <= 0) return;
-        if (clip.length() > available) clip = clip.substring(0, available);
-        pushUndo();
-        selected.content = t.substring(0, cursor) + clip + t.substring(cursor);
-        cursor += clip.length();
+                .toString()
+                .replace("\t", "    ");
+        insertText(clip);
     }
 
     private void copySelectionToClipboard() {
@@ -583,9 +626,9 @@ public class NotelyScreen extends Screen {
         if (sep >= 0) {
             selected.content = snapshot.substring(0, sep);
             try {
-                cursor = Math.min(Integer.parseInt(snapshot.substring(sep + 1)), selected.content.length());
+                setContentCursor(Integer.parseInt(snapshot.substring(sep + 1)));
             } catch (NumberFormatException ignored) {
-                cursor = selected.content.length();
+                setContentCursor(selected.content.length());
             }
         }
     }
@@ -631,7 +674,7 @@ public class NotelyScreen extends Screen {
         pushUndo();
         int lo = selMin(), hi = selMax();
         selected.content = selected.content.substring(0, lo) + selected.content.substring(hi);
-        cursor = lo;
+        setContentCursor(lo);
         selectionStart = -1;
     }
 
@@ -713,11 +756,7 @@ public class NotelyScreen extends Screen {
 
             int titleY = oy + TORN + 18;
             if (!renamingTitle && iy >= titleY && iy < titleY + 11 && ix < ox + W - 60) {
-                renamingTitle = true;
-                titleBuffer = selected.title;
-                titleCursor = titleBuffer.length();
-                titleSelStart = -1;
-                titleUndoStack.clear();
+                renameTitle();
                 return true;
             }
             if (renamingTitle && iy >= oy + TORN + 18 && iy < oy + TORN + 29 && ix < ox + W - 60) {
@@ -739,7 +778,7 @@ public class NotelyScreen extends Screen {
                             return true;
                         }
                         selectionStart = -1;
-                        cursor = clickPosToCursor(ix, rl);
+                        setContentCursor(clickPosToCursor(ix, rl));
                         draggingContent = true;
                         return true;
                     }
@@ -777,25 +816,20 @@ public class NotelyScreen extends Screen {
         int textX = ox + LIST_W + 22 + MarkdownRenderer.getTextXOffset(rl.type());
         String display = MarkdownRenderer.getDisplayText(rl.raw(), rl.type());
         int relX = mx - textX;
-
         if (relX <= 0) {
-            return rl.charStart() + MarkdownRenderer.prefixLen(rl.type());
+            return rl.charStart() + MarkdownRenderer.prefixLen(rl.type()) + rl.segOffset();
         }
-
         String relevant = display.substring(rl.segOffset());
         int localPos = relevant.length();
-
         for (int i = 0; i <= relevant.length(); i++) {
             int w = font.width(relevant.substring(0, i));
             if (w >= relX) {
                 int wPrev = i > 0 ? font.width(relevant.substring(0, i - 1)) : 0;
-                int chosen = (relX - wPrev < w - relX) ? i - 1 : i;
-                localPos = chosen;
+                localPos = (relX - wPrev < w - relX) ? i - 1 : i;
                 break;
             }
         }
-
-        return rl.charStart() + rl.segOffset() + localPos;
+        return rl.charStart() + MarkdownRenderer.prefixLen(rl.type()) + rl.segOffset() + localPos;
     }
 
     private void toggleTodo(int lineCharStart) {
@@ -836,7 +870,7 @@ public class NotelyScreen extends Screen {
             }
 
             if (selectionStart < 0) selectionStart = cursor;
-            cursor = newCursor;
+            setContentCursor(newCursor);
             if (cursor == selectionStart) selectionStart = -1;
             return true;
         }
@@ -869,7 +903,8 @@ public class NotelyScreen extends Screen {
         if ((int) mx < ox + LIST_W) {
             listOffset = Mth.clamp((int) (listOffset - dy), 0, Math.max(0, NotelyData.notes.size() - visibleListRows()));
         } else {
-            textOffset = Mth.clamp((int) (textOffset - dy), 0, Math.max(0, countTextLines() - visibleEditorLines()));
+            textOffset = Mth.clamp((int) (textOffset - dy), 0, maxTextOffset());
+            scrollTarget = textOffset;
         }
         return true;
     }
@@ -999,41 +1034,29 @@ public class NotelyScreen extends Screen {
         int dy = contentY - textOffset * LINE_H;
         int ci = 0;
         int maxW = editorMaxW();
-
-        // Find which logical line index the cursor is on (for raw-text preview)
         int cursorLi = TextCursor.cursorLineIndex(text, cursor);
-
         outer:
         for (int li = 0; li < rawLines.length; li++) {
             String raw = rawLines[li];
             LineType type = MarkdownRenderer.detectLineType(raw);
             boolean cursorOnThisLine = (li == cursorLi) && !renamingTitle;
-
-            // Obsidian mode: show raw text when cursor is on this line
             String display = cursorOnThisLine ? raw : MarkdownRenderer.getDisplayText(raw, type);
             LineType renderType = cursorOnThisLine ? LineType.NORMAL : type;
             int xOff = cursorOnThisLine ? 0 : MarkdownRenderer.getTextXOffset(type);
-
             List<String> wrapped = MarkdownRenderer.wrapLine(font, display, maxW - xOff);
             if (wrapped.isEmpty()) wrapped.add("");
-
+            int segDisplayStart = 0;
             for (int wi = 0; wi < wrapped.size(); wi++) {
                 String seg = wrapped.get(wi);
-
-                String beforeThisSeg = String.join("", wrapped.subList(0, wi));
-                int segOffset = beforeThisSeg.length();
-
-                int segCharStart = ci + segOffset;
+                int segOffset = segDisplayStart;
+                int prefix = cursorOnThisLine ? 0 : MarkdownRenderer.prefixLen(type);
+                int segCharStart = ci + prefix + segOffset;
                 int segCharEnd = segCharStart + seg.length();
-
                 if (dy >= clipTop - LINE_H && dy <= clipBot) {
                     renderedLines.add(new RenderedLine(ci, ci + raw.length(), segOffset, seg.length(), dy, type, raw));
-
                     if (cursorOnThisLine) {
                         g.fill(ex - 2, dy - 1, ex + maxW, dy + LINE_H, 0x18000000);
                     }
-
-                    // Selection highlight
                     if (hasSelection()) {
                         int lo = selMin(), hi = selMax();
                         if (lo < segCharEnd && hi > segCharStart) {
@@ -1045,11 +1068,8 @@ public class NotelyScreen extends Screen {
                             g.fill(x1, dy, x2, dy + LINE_H - 1, 0x664488FF);
                         }
                     }
-
-                    MarkdownRenderer.drawLine(g, font, seg, ex + xOff, dy, renderType, maxW);
+                    MarkdownRenderer.drawLine(g, font, seg, ex + xOff, dy, renderType, maxW, wi == 0);
                 }
-
-                // Cursor drawing — now correct per segment
                 if (!renamingTitle && cursorVisible && cursor >= segCharStart && cursor <= segCharEnd) {
                     int prefixOffset = cursorOnThisLine ? 0 : MarkdownRenderer.prefixLen(type);
                     int posInSeg = cursor - segCharStart - prefixOffset;
@@ -1061,8 +1081,10 @@ public class NotelyScreen extends Screen {
                         }
                     }
                 }
-
                 if (wi < wrapped.size() - 1) {
+                    boolean wordBreak = (segDisplayStart + seg.length() < display.length())
+                            && display.charAt(segDisplayStart + seg.length()) == ' ';
+                    segDisplayStart += seg.length() + (wordBreak ? 1 : 0);
                     dy += LINE_H;
                     if (dy > clipBot + LINE_H) break outer;
                 }
@@ -1126,17 +1148,12 @@ public class NotelyScreen extends Screen {
     // Layout helpers
     // =========================================================
 
-    private int visibleListRows() {
-        return (H - TORN * 2 - 22) / ROW_H;
-    }
+    private int visibleListRows() { return (H - TORN * 2 - 22) / ROW_H; }
 
-    private int visibleEditorLines() {
-        return (H - TORN * 2 - 36) / LINE_H;
-    }
+    private int visibleEditorLines() { return Math.max(1, (H - TORN * 2 - 54) / LINE_H); }
 
-    private int editorMaxW() {
-        return W - LIST_W - 32;
-    }
+
+    private int editorMaxW() { return W - LIST_W - 32; }
 
     private int countTextLines() {
         if (selected == null) return 0;
@@ -1145,5 +1162,48 @@ public class NotelyScreen extends Screen {
         for (String line : selected.content.split("\n", -1))
             count += Math.max(1, MarkdownRenderer.wrapLine(font, line, maxW).size());
         return count;
+    }
+
+    private int maxTextOffset() {
+        return Math.max(0, countTextLines() - visibleEditorLines());
+    }
+
+    private int cursorRow() {
+        String[] rawLines = selected.content.split("\n", -1);
+        int maxW = editorMaxW();
+        int row = 0, ci = 0, li = 0;
+        while (cursor > ci + rawLines[li].length()) {
+            row += MarkdownRenderer.wrapLine(font, rawLines[li], maxW).size();
+            ci += rawLines[li].length() + 1;
+            li++;
+        }
+        String raw = rawLines[li];
+        List<String> wrapped = MarkdownRenderer.wrapLine(font, raw, maxW);
+        int localPos = cursor - ci;
+        int segStart = 0;
+        for (int wi = 0; wi < wrapped.size() - 1; wi++) {
+            int segLen = wrapped.get(wi).length();
+            int segEnd = segStart + segLen;
+            if (localPos <= segEnd) break;
+            boolean wordBreak = segEnd < raw.length() && raw.charAt(segEnd) == ' ';
+            segStart += segLen + (wordBreak ? 1 : 0);
+            row++;
+        }
+        return row;
+    }
+    
+    private void setContentCursor(int pos) {
+        int next = Mth.clamp(pos, 0, selected.content.length());
+        if (next == cursor) return;
+        cursor = next;
+        ensureCursorVisible();
+    }
+
+    private void ensureCursorVisible() {
+        int vis = visibleEditorLines();
+        int row = cursorRow();
+        if (row >= scrollTarget && row < scrollTarget + vis) return;
+        int target = row < scrollTarget ? row : row - vis + 1;
+        scrollTarget = Mth.clamp(target, 0, maxTextOffset());
     }
 }
