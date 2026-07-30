@@ -75,14 +75,11 @@ public class PinnedNotesOverlay {
             String[] lines = note.content.split("\n", -1);
             int lineH = Math.max(1, (int) (LINE_H * s.fontSize));
             int visibleLines = (h - HEADER - PAD * 2) / lineH;
-            int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
 
             int totalRows = 0;
             for (String raw : lines) {
                 LineType type = MarkdownRenderer.detectLineType(raw);
-                String display = MarkdownRenderer.getDisplayText(raw, type);
-                int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
-                totalRows += Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+                totalRows += wrapSegments(mc, raw, type, s.fontSize, w).size();
             }
 
             int maxScroll = Math.max(0, totalRows - visibleLines);
@@ -100,10 +97,8 @@ public class PinnedNotesOverlay {
                 if (ty > (int) ((h - HEADER - PAD * 2) / s.fontSize)) break;
                 String raw = lines[li];
                 LineType type = MarkdownRenderer.detectLineType(raw);
-                String display = MarkdownRenderer.getDisplayText(raw, type);
-                int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
-                List<String> wrapped = MarkdownRenderer.wrapLine(mc.font, display, lineMaxW);
-                if (wrapped.isEmpty()) wrapped.add("");
+                List<String> wrapped = wrapSegments(mc, raw, type, s.fontSize, w);
+                int lineMaxW = (int) ((w - PAD * 2) / s.fontSize) - MarkdownRenderer.getTextXOffset(type);
                 boolean firstSeg = true;
                 for (String seg : wrapped) {
                     if (ty >= -LINE_H && ty <= (int) ((h - HEADER - PAD * 2) / s.fontSize)) {
@@ -263,16 +258,13 @@ public class PinnedNotesOverlay {
         int ci = 0;
 
         Minecraft mc = Minecraft.getInstance();
-        int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
 
         for (int li = 0; li < lines.length; li++) {
             if (ty > y + h - 4) break;
             String line = lines[li];
 
             LineType type = MarkdownRenderer.detectLineType(line);
-            String display = MarkdownRenderer.getDisplayText(line, type);
-            int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
-            int segCount = Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+            int segCount = wrapSegments(mc, line, type, s.fontSize, w).size();
 
             if (ty + lineH > y + HEADER && (line.startsWith("[ ] ") || line.startsWith("[x] "))) {
                 if (mx >= x + PAD && mx < x + PAD + 9 && my >= ty && my < ty + 8) {
@@ -359,14 +351,11 @@ public class PinnedNotesOverlay {
                 if (note == null) continue;
 
                 int lineH = (int) (LINE_H * s.fontSize);
-                int baseMaxW = (int) ((w - PAD * 2) / s.fontSize);
 
                 int totalRows = 0;
                 for (String raw : note.content.split("\n", -1)) {
                     LineType type = MarkdownRenderer.detectLineType(raw);
-                    String display = MarkdownRenderer.getDisplayText(raw, type);
-                    int lineMaxW = baseMaxW - MarkdownRenderer.getTextXOffset(type);
-                    totalRows += Math.max(1, MarkdownRenderer.wrapLine(mc.font, display, lineMaxW).size());
+                    totalRows += wrapSegments(mc, raw, type, s.fontSize, w).size();
                 }
 
                 int visibleLines = (h - HEADER - PAD * 2) / Math.max(1, lineH);
@@ -388,6 +377,12 @@ public class PinnedNotesOverlay {
 
     private static int scaled(double raw, int screenSize, int guiSize) {
         return (int) (raw * guiSize / screenSize);
+    }
+
+    private static List<String> wrapSegments(Minecraft mc, String raw, LineType type, float fontSize, int width) {
+        int lineMaxW = (int) ((width - PAD * 2) / fontSize) - MarkdownRenderer.getTextXOffset(type);
+        List<String> wrapped = MarkdownRenderer.wrapLine(mc.font, MarkdownRenderer.getDisplayText(raw, type), lineMaxW);
+        return wrapped.isEmpty() ? List.of("") : wrapped;
     }
 
     private static int darken(int color, float f) {
